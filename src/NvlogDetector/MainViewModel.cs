@@ -25,6 +25,11 @@ public sealed class MainViewModel : Observable, IDisposable
     readonly bool _admin;
     readonly string? _windowsVersion;
     readonly string? _marketingVersion;
+    readonly NvtoppsWorkaround _workaround;
+    WorkaroundState _workaroundState = new(false, false, "Checking workaround availability...");
+    bool _workaroundBusy;
+    int _workaroundRefresh;
+    string _workaroundResult = "";
 
     AnomalyTracker _tracker;
     EtwFileWriteMonitor? _monitor;
@@ -43,13 +48,14 @@ public sealed class MainViewModel : Observable, IDisposable
     bool _disposed;
     DateTimeOffset _sessionStarted;
 
-    public MainViewModel(SingleInstance instance, string? historyPath = null)
+    public MainViewModel(SingleInstance instance, string? historyPath = null, INvtoppsPlatform? workaroundPlatform = null)
     {
         _instance = instance;
         _admin = IsAdministrator();
         _history = HistoryStore.Load(historyPath);
         _windowsVersion = NvidiaInfo.WindowsDriverVersion();
         _marketingVersion = NvidiaVersion.FromWindowsDriver(_windowsVersion);
+        _workaround = new NvtoppsWorkaround(workaroundPlatform ?? new WindowsNvtoppsPlatform());
         _tracker = new AnomalyTracker();
         _knownPaths = File.Exists(NvlogPath.DefaultPath) ? [NvlogPath.DefaultPath] : [];
         _latestFiles = ReadFiles();
@@ -58,6 +64,9 @@ public sealed class MainViewModel : Observable, IDisposable
         ElevateCommand = new RelayCommand(Elevate);
         ExportCommand = new RelayCommand(Export);
         ClearCommand = new RelayCommand(Clear);
+        ApplyWorkaroundCommand = new RelayCommand(() => _ = ChangeWorkaroundAsync(restore: false));
+        RestoreWorkaroundCommand = new RelayCommand(() => _ = ChangeWorkaroundAsync(restore: true));
+        RefreshWorkaround();
         EpisodesView = CollectionViewSource.GetDefaultView(Episodes);
         EpisodesView.Filter = MatchesActivityFilter;
         ApplyEpisodeSort();
@@ -117,6 +126,71 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand ExportCommand { get; }
 
     public RelayCommand ClearCommand { get; }
+
+    public RelayCommand ApplyWorkaroundCommand { get; }
+    public RelayCommand RestoreWorkaroundCommand { get; }
+    public bool CanApplyWorkaround => _admin && !_workaroundBusy && _workaroundState.CanApply;
+    public bool CanRestoreWorkaround => _admin && !_workaroundBusy && _workaroundState.CanRestore;
+    public bool IsWorkaroundBusy => _workaroundBusy;
+    public string WorkaroundStatusText => _workaroundBusy ? "Updating NVIDIA settings; please wait..." :
+        (_admin ? _workaroundState.Message : "Administrator rights are required. " + _workaroundState.Message);
+    public string WorkaroundResultText => _workaroundResult;
+
+    void RefreshWorkaround()
+    {
+        try { _workaroundState = _workaround.Inspect(); }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _workaroundState = new(false, false, "Workaround status could not be read: " + error.Message);
+        }
+        NotifyWorkaround();
+    }
+
+    void NotifyWorkaround()
+    {
+        Raise(nameof(CanApplyWorkaround));
+        Raise(nameof(CanRestoreWorkaround));
+        Raise(nameof(IsWorkaroundBusy));
+        Raise(nameof(WorkaroundStatusText));
+        Raise(nameof(WorkaroundResultText));
+    }
+
+    async Task ChangeWorkaroundAsync(bool restore)
+    {
+        if (_workaroundBusy || !_admin || (restore ? !CanRestoreWorkaround : !CanApplyWorkaround)) return;
+        var description = restore
+            ? "Restore this app's saved original DisableLoad setting and reload NVIDIA Display Container? The service may be started if it was running before the workaround."
+            : "Apply an unofficial community workaround by setting DisableLoad (DWORD) to 1 for the _nvtopps plugin? The original value is saved first. NVIDIA Display Container will be restarted; its apps may briefly disconnect and the display may flicker. Other plugin functions may be affected.";
+        description += "\n\nHKLM\\" + WindowsNvtoppsPlatform.PluginPath + "\\DisableLoad";
+        description += "\n\nClose any driver installer before continuing. No driver downgrade or log-file deletion is performed.";
+        if (MessageBox.Show(description, restore ? "Restore original NVIDIA setting" : "Apply community workaround",
+            MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+
+        _workaroundBusy = true;
+        _workaroundResult = "";
+        NotifyWorkaround();
+        try
+        {
+            await Task.Run(() => WindowsNvtoppsPlatform.RunExclusive(() =>
+            {
+                if (restore) _workaround.Restore();
+                else _workaround.Apply(_marketingVersion ?? _windowsVersion);
+            }));
+            _workaroundResult = restore
+                ? "Original setting restored and service reloaded. Observe new writes; previous history is retained."
+                : "Workaround applied and original setting saved. Observe new writes; a quiet log now reflects the disabled plugin, not proof of a fixed driver. Recheck settings after driver updates.";
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _workaroundResult = error.Message;
+            MessageBox.Show(error.Message, "Workaround could not complete", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _workaroundBusy = false;
+            RefreshWorkaround();
+        }
+    }
 
     public string StatusText => StatusField;
 
@@ -235,6 +309,11 @@ public sealed class MainViewModel : Observable, IDisposable
             return;
 
         var now = DateTimeOffset.UtcNow;
+        if (!_workaroundBusy && _workaroundRefresh-- <= 0)
+        {
+            _workaroundRefresh = 5;
+            RefreshWorkaround();
+        }
         ScheduleScan();
         _latestFiles = ReadFiles();
         _growth.Observe(_latestFiles.Select(file => new KeyValuePair<string, long>(file.Path, file.Length)));

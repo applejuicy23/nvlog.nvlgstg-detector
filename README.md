@@ -1,7 +1,7 @@
 # nvlog.nvlgstg detector
 
 Windows x64 detector for excessive writes to `nvlog.nvlgstg` in NVIDIA's ProgramData folders.
-It observes writes; it does not change drivers, services, registry settings, or log permissions.
+Monitoring observes writes without changing NVIDIA settings. An optional, explicitly confirmed community workaround can disable the `_nvtopps` plugin and restart NVIDIA Display Container.
 
 **Experimental:** this is a file-write monitor with heuristic alerts, not an official NVIDIA diagnostic or an SSD-health tool. An incomplete-measurement warning means the result cannot establish that the file is quiet.
 
@@ -20,6 +20,24 @@ If no release is available yet, build from source using the instructions below.
 ## Privacy and permissions
 
 The application makes no network requests. History and error logs are stored locally under `%LOCALAPPDATA%\nvlog.nvlgstg-detector`; CSV export happens only when requested. Administrator rights and `SeDebugPrivilege` are used to observe ETW events and identify the log file's open handles. The program does not alter NVIDIA files or fix the driver.
+
+## Optional community workaround
+
+**Apply workaround** implements the [community-reported `_nvtopps` workaround](https://www.reddit.com/r/nvidia/comments/1y0do73/quick_fix_for_the_nvidia_ssd_write_bug_keeps/). It is not an official NVIDIA fix. Effectiveness and effects on other plugin functions may vary. Monitoring alone never applies it.
+
+After confirmation, the app saves the original setting, sets `DisableLoad` to DWORD `1` under:
+
+```text
+HKLM\SYSTEM\CurrentControlSet\Services\NVDisplay.ContainerLocalSystem\Parameters\LocalSystem\_nvtopps
+```
+
+It then restarts `NVDisplay.ContainerLocalSystem`. Close any driver installer first. NVIDIA applications may briefly disconnect during the service restart. The driver is not downgraded and the log file is not deleted.
+
+**Restore original setting** restores the exact saved DWORD, or removes only `DisableLoad` if it was originally absent, and reloads the service. It never deletes the plugin key or unrelated values. An empty key created by the app may remain. The persistent backup is stored in `HKLM\SOFTWARE\NvlogDetector\NvtoppsWorkaround` so restoration remains available after restarting the app. A failed operation attempts recovery; if recovery cannot complete, the backup is retained for retry.
+
+The app refuses to overwrite an existing backup, adopt a plugin already disabled outside the app, or automatically replace a conflicting external change. Unsupported registry types are left untouched. Administrator rights are required. Recheck the setting after driver updates, which may replace it.
+
+A quiet log after disabling the plugin means that this workaround suppressed activity; it does **not** demonstrate that the driver itself was repaired. Existing write history is retained. Validate the behavior by observing new writes.
 
 ## What the indicators mean
 

@@ -269,6 +269,22 @@
                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                     Text="{Binding ProcessText}"
                     TextWrapping="Wrap" />
+                <ui:Card Margin="0,10,0,0" Padding="12">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="Optional community workaround" />
+                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="Disables the _nvtopps plugin and reloads NVIDIA Display Container. This changes a machine-wide registry value and may affect plugin functions. It is not an official NVIDIA fix." />
+                        <WrapPanel Margin="0,8,0,0">
+                            <ui:Button x:Name="ApplyWorkaroundButton" Margin="0,0,8,4" Content="Apply workaround"
+                                Command="{Binding ApplyWorkaroundCommand}" IsEnabled="{Binding CanApplyWorkaround}" />
+                            <ui:Button x:Name="RestoreWorkaroundButton" Margin="0,0,0,4" Content="Restore original setting"
+                                Command="{Binding RestoreWorkaroundCommand}" IsEnabled="{Binding CanRestoreWorkaround}" />
+                        </WrapPanel>
+                        <TextBlock Text="{Binding WorkaroundStatusText}" TextWrapping="Wrap" FontSize="12" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding WorkaroundResultText}" TextWrapping="Wrap" FontSize="12"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </ui:Card>
                 <Expander Margin="0,8,0,0" Header="Details and diagnostics">
                 <StackPanel>
                 <TextBlock

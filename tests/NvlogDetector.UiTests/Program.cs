@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NvlogDetector;
 using NvlogDetector.Core;
+using Microsoft.Win32;
 
 internal static class Program
 {
@@ -16,6 +17,7 @@ internal static class Program
         var path = Path.Combine(Path.GetTempPath(), "nvlog-ui-test-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
+            CheckRegistryWorkaround();
             var store = HistoryStore.Load(path);
             var now = DateTimeOffset.UtcNow.AddMinutes(-10);
             var index = 0;
@@ -86,9 +88,9 @@ internal static class Program
                 System.Windows.Documents.TextElement.SetForeground(root, (Brush)application.FindResource("TextFillColorPrimaryBrush"));
                 root.DataContext = view;
                 root.Width = 1120;
-                root.Height = 850;
-                root.Measure(new Size(1120, 850));
-                root.Arrange(new Rect(0, 0, 1120, 850));
+                root.Height = 1200;
+                root.Measure(new Size(1120, 1200));
+                root.Arrange(new Rect(0, 0, 1120, 1200));
                 root.UpdateLayout();
                 var frame = new DispatcherFrame();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
@@ -101,14 +103,16 @@ internal static class Program
                 Check(grid.ActualHeight >= 140, "Table has visible layout space");
                 Check(grid.Columns[0].SortMemberPath == nameof(EpisodeRow.SeverityRank), "Level column sorts by rank");
                 Check(grid.Columns[4].SortMemberPath == nameof(EpisodeRow.Bytes), "Volume column sorts numerically");
-                var bitmap = new RenderTargetBitmap(1120, 850, 96, 96, PixelFormats.Pbgra32);
+                Check(window.FindName("ApplyWorkaroundButton") is Button, "Apply workaround button exists");
+                Check(window.FindName("RestoreWorkaroundButton") is Button, "Restore workaround button exists");
+                var bitmap = new RenderTargetBitmap(1120, 1200, 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(root);
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 using var output = File.Create(args[0]);
                 encoder.Save(output);
             }
-            Console.WriteLine("PASS: color filters, empty state, all four sort orders, numeric column sorting, and table layout.");
+            Console.WriteLine("PASS: isolated registry backup/restore, color filters, sorting, table layout, and workaround buttons. NVIDIA settings/services were not changed.");
             return 0;
         }
         catch (Exception error)
@@ -122,5 +126,45 @@ internal static class Program
     static void Check(bool condition, string name)
     {
         if (!condition) throw new InvalidOperationException(name);
+    }
+
+    static void CheckRegistryWorkaround()
+    {
+        var id = Guid.NewGuid();
+        var root = @"Software\NvlogDetector.Tests\" + id.ToString("N");
+        using var hive = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
+        try
+        {
+            var platform = WindowsNvtoppsPlatform.ForRegistryTest(id);
+            var original = platform.ReadSetting();
+            Check(!original.KeyExisted && platform.ReadBackup() == null, "Initially absent setting and backup");
+            var backup = new NvtoppsBackup(original, true, "test");
+            platform.SaveBackup(backup);
+            Check(WindowsNvtoppsPlatform.ForRegistryTest(id).ReadBackup() == backup, "Durable backup roundtrip across instances");
+            platform.DisablePlugin();
+            Check(platform.ReadSetting().Disabled, "Registry DWORD set to one");
+            using (var key = hive.CreateSubKey(root + @"\Plugin"))
+            {
+                key.SetValue("Unrelated", "keep");
+                using var child = key.CreateSubKey("OtherPluginData");
+                child.SetValue("Keep", 17);
+            }
+            platform.RestoreSetting(original);
+            Check(!platform.ReadSetting().ValueExisted, "Only originally absent value is removed");
+            using (var key = hive.OpenSubKey(root + @"\Plugin", writable: true))
+            {
+                Check((string?)key!.GetValue("Unrelated") == "keep", "Unrelated registry value preserved");
+                using var child = key.OpenSubKey("OtherPluginData");
+                Check((int?)child!.GetValue("Keep") == 17, "Unrelated subkey preserved");
+                key.SetValue("DisableLoad", -1, RegistryValueKind.DWord);
+            }
+            var previous = platform.ReadSetting();
+            platform.DisablePlugin();
+            platform.RestoreSetting(previous);
+            Check(platform.ReadSetting().Value == -1, "Exact original DWORD restored");
+            platform.ClearBackup();
+            Check(platform.ReadBackup() == null, "Backup cleared");
+        }
+        finally { hive.DeleteSubKeyTree(root, throwOnMissingSubKey: false); }
     }
 }
