@@ -3,13 +3,11 @@
 Windows x64 detector for excessive writes to `nvlog.nvlgstg` in NVIDIA's ProgramData folders.
 It observes writes; it does not change drivers, services, registry settings, or log permissions.
 
-## Preview
+**Experimental:** this is a file-write monitor with heuristic alerts, not an official NVIDIA diagnostic or an SSD-health tool. An incomplete-measurement warning means the result cannot establish that the file is quiet.
 
 ![nvlog detector showing color-coded activity, a per-minute chart, and 118.06 GB of recorded session writes](docs/images/nvlogprogram.png)
 
 The session counter in this capture shows 118.06 GB over 4 h 35 min while the log occupies 19.09 MB. These are logical file writes, not measured SSD/NAND writes. The late-event warning means some event timing is uncertain.
-
-**Experimental:** this is a file-write monitor with heuristic alerts, not an official NVIDIA diagnostic or an SSD-health tool. An incomplete-measurement warning means the result cannot establish that the file is quiet.
 
 ## Download and run
 
