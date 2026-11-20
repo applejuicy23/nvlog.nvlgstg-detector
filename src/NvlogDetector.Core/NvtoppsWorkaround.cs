@@ -11,7 +11,7 @@ public sealed record NvtoppsSetting(bool KeyExisted, bool ValueExisted, bool IsD
 public sealed record NvtoppsBackup(NvtoppsSetting Original, bool ServiceWasRunning,
     string? DriverVersion, int FormatVersion = 1);
 
-public sealed record WorkaroundState(bool CanApply, bool CanRestore, string Message);
+public sealed record WorkaroundState(bool CanApply, bool CanRestore, string Message, bool? Configured = null);
 
 /// <summary>Implementations must store the backup durably before changing DisableLoad.</summary>
 public interface INvtoppsPlatform
@@ -34,24 +34,24 @@ public sealed class NvtoppsWorkaround(INvtoppsPlatform platform)
     {
         var backup = platform.ReadBackup();
         if (backup != null) Validate(backup);
-        if (!platform.ServiceExists)
-            return new(false, false, "NVIDIA Display Container service was not found. No settings changed.");
         var current = platform.ReadSetting();
         if (!current.Supported)
             return new(false, false, "DisableLoad has an unsupported registry type. No settings changed.");
+        if (!platform.ServiceExists)
+            return new(false, false, "NVIDIA Display Container service was not found. No settings changed.", current.Disabled);
         if (backup != null)
         {
             if (!current.Disabled && !current.SameValue(backup.Original))
-                return new(false, false, "The setting changed outside this app. The original backup is retained; automatic restore is blocked.");
+                return new(false, false, "The setting changed outside this app. The original backup is retained; automatic restore is blocked.", current.Disabled);
             return new(false, true, current.Disabled
                 ? "Workaround configured. Original setting saved. Low writes now reflect the disabled plugin, not a repaired driver."
-                : "Original setting is saved; restoration may still need to complete.");
+                : "Original setting is saved; restoration may still need to complete.", current.Disabled);
         }
         if (current.Disabled)
-            return new(false, false, "The plugin is already disabled outside this app. No original backup is available to restore.");
+            return new(false, false, "The plugin is already disabled outside this app. No original backup is available to restore.", true);
         if (!platform.ServiceRunning)
-            return new(false, false, "NVIDIA Display Container is not running. Start it normally before applying this workaround.");
-        return new(true, false, "Not applied. Optional community workaround; effectiveness and side effects may vary.");
+            return new(false, false, "NVIDIA Display Container is not running. Start it normally before applying this workaround.", false);
+        return new(true, false, "Not applied. Optional community workaround; effectiveness and side effects may vary.", false);
     }
 
     public void Apply(string? driverVersion)

@@ -2,6 +2,8 @@ using System.Text.Json;
 
 namespace NvlogDetector.Core;
 
+public sealed record WorkaroundEvent(DateTimeOffset Timestamp, bool Configured, string Action, string? Actor);
+
 public sealed class StoredEpisode
 {
     public DateTimeOffset Start { get; set; }
@@ -30,6 +32,7 @@ public sealed class HistoryStore
     readonly object _gate = new();
     readonly string _path;
     readonly List<StoredEpisode> _episodes = [];
+    readonly List<WorkaroundEvent> _workaroundEvents = [];
     readonly Dictionary<long, long> _minutes = [];
 
     HistoryStore(string path) => _path = path;
@@ -57,6 +60,7 @@ public sealed class HistoryStore
                 return store;
 
             store.TotalBytes = Math.Max(0, document.TotalBytes);
+            store._workaroundEvents.AddRange(document.WorkaroundEvents.OrderBy(item => item.Timestamp));
             if (document.ThresholdBytesPerSecond > 0)
                 store.ThresholdBytesPerSecond = document.ThresholdBytesPerSecond;
 
@@ -118,6 +122,27 @@ public sealed class HistoryStore
         }
     }
 
+    public WorkaroundEvent[] WorkaroundEvents
+    {
+        get { lock (_gate) return _workaroundEvents.ToArray(); }
+    }
+
+    // Observations give the discovery time, never the unknown time/actor of an external change.
+    // Applied/Restored events are recorded only after a successful operation in this app.
+    public bool RecordWorkaround(DateTimeOffset timestamp, bool configured, string action = "Detected", string? actor = null)
+    {
+        lock (_gate)
+        {
+            if (action == "Detected" && _workaroundEvents.LastOrDefault()?.Configured == configured)
+                return false;
+            var item = new WorkaroundEvent(timestamp, configured, action, actor);
+            _workaroundEvents.Add(item);
+            try { WriteUnlocked(); }
+            catch { _workaroundEvents.Remove(item); throw; }
+            return true;
+        }
+    }
+
     public long GetMinute(DateTimeOffset timestamp)
     {
         lock (_gate)
@@ -147,6 +172,7 @@ public sealed class HistoryStore
         {
             TotalBytes = 0;
             _episodes.Clear();
+            _workaroundEvents.Clear();
             _minutes.Clear();
             OpenEpisode = null;
             WriteUnlocked();
@@ -168,12 +194,15 @@ public sealed class HistoryStore
 
         if (_episodes.Count > 1000)
             _episodes.RemoveRange(0, _episodes.Count - 1000);
+        if (_workaroundEvents.Count > 1000)
+            _workaroundEvents.RemoveRange(0, _workaroundEvents.Count - 1000);
 
         var document = new HistoryDocument
         {
             TotalBytes = TotalBytes,
             ThresholdBytesPerSecond = ThresholdBytesPerSecond,
             Episodes = _episodes.ToList(),
+            WorkaroundEvents = _workaroundEvents.ToList(),
             Minutes = _minutes
                 .OrderBy(pair => pair.Key)
                 .Select(pair => new MinuteRow
@@ -209,6 +238,7 @@ public sealed class HistoryStore
         public double ThresholdBytesPerSecond { get; set; }
 
         public List<StoredEpisode> Episodes { get; set; } = [];
+        public List<WorkaroundEvent> WorkaroundEvents { get; set; } = [];
 
         public List<MinuteRow> Minutes { get; set; } = [];
 

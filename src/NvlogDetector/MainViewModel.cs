@@ -30,6 +30,8 @@ public sealed class MainViewModel : Observable, IDisposable
     bool _workaroundBusy;
     int _workaroundRefresh;
     string _workaroundResult = "";
+    DateTimeOffset? _workaroundChecked;
+    string _workaroundHistoryError = "";
 
     AnomalyTracker _tracker;
     EtwFileWriteMonitor? _monitor;
@@ -135,13 +137,63 @@ public sealed class MainViewModel : Observable, IDisposable
     public string WorkaroundStatusText => _workaroundBusy ? "Updating NVIDIA settings; please wait..." :
         (_admin ? _workaroundState.Message : "Administrator rights are required. " + _workaroundState.Message);
     public string WorkaroundResultText => _workaroundResult;
+    public bool WorkaroundConfigured => _workaroundState.Configured == true;
+    public bool WorkaroundConfigurationKnown => _workaroundState.Configured.HasValue;
+    public string WorkaroundActivityText => "Community workaround: " + (_workaroundState.Configured switch
+    {
+        true => "ON (registry)", false => "OFF (registry)", _ => "UNKNOWN",
+    }) + (_workaroundChecked is { } time ? " · checked " + ByteFormat.Time(time) : "");
+    public string WorkaroundActivityHint => (_workaroundState.Configured switch
+    {
+        true => "DisableLoad=1 persists across restarts. Registry state does not verify whether the plugin is currently loaded or the driver is fixed.",
+        false => "DisableLoad=1 is not configured. This does not prove that a previously disabled plugin has already reloaded.",
+        _ => "The current setting could not be verified. Do not interpret this as OFF.",
+    }) + _workaroundHistoryError;
+    public string WorkaroundHistoryHeader => $"Workaround history ({WorkaroundHistory.Count})";
+    public ObservableCollection<string> WorkaroundHistory { get; } = [];
+
+    void UpdateWorkaroundHistory()
+    {
+        WorkaroundHistory.Clear();
+        foreach (var item in _history.WorkaroundEvents.Reverse())
+        {
+            var action = item.Action == "Detected"
+                ? "Detected " + (item.Configured ? "ON" : "OFF") + " · actual change time and actor unknown"
+                : item.Action + " by " + item.Actor + " · " + (item.Configured ? "ON" : "OFF");
+            WorkaroundHistory.Add(ByteFormat.Time(item.Timestamp) + " · " + action);
+        }
+        Raise(nameof(WorkaroundHistoryHeader));
+    }
+
+    void RecordWorkaround(bool configured, string action = "Detected", string? actor = null)
+    {
+        try
+        {
+            var added = _history.RecordWorkaround(DateTimeOffset.UtcNow, configured, action, actor);
+            _workaroundHistoryError = "";
+            if (added || WorkaroundHistory.Count == 0) UpdateWorkaroundHistory();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _workaroundHistoryError = " History could not be saved: " + error.Message;
+            UpdateWorkaroundHistory();
+        }
+    }
 
     void RefreshWorkaround()
     {
-        try { _workaroundState = _workaround.Inspect(); }
+        try
+        {
+            _workaroundState = _workaround.Inspect();
+            _workaroundChecked = DateTimeOffset.UtcNow;
+            if (_workaroundState.Configured is { } configured) RecordWorkaround(configured);
+            else UpdateWorkaroundHistory();
+        }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             _workaroundState = new(false, false, "Workaround status could not be read: " + error.Message);
+            _workaroundChecked = null;
+            UpdateWorkaroundHistory();
         }
         NotifyWorkaround();
     }
@@ -153,6 +205,10 @@ public sealed class MainViewModel : Observable, IDisposable
         Raise(nameof(IsWorkaroundBusy));
         Raise(nameof(WorkaroundStatusText));
         Raise(nameof(WorkaroundResultText));
+        Raise(nameof(WorkaroundConfigured));
+        Raise(nameof(WorkaroundConfigurationKnown));
+        Raise(nameof(WorkaroundActivityText));
+        Raise(nameof(WorkaroundActivityHint));
     }
 
     async Task ChangeWorkaroundAsync(bool restore)
@@ -176,6 +232,7 @@ public sealed class MainViewModel : Observable, IDisposable
                 if (restore) _workaround.Restore();
                 else _workaround.Apply(_marketingVersion ?? _windowsVersion);
             }));
+            RecordWorkaround(!restore, restore ? "Restored" : "Applied", Environment.UserName);
             _workaroundResult = restore
                 ? "Original setting restored and service reloaded. Observe new writes; previous history is retained."
                 : "Workaround applied and original setting saved. Observe new writes; a quiet log now reflects the disabled plugin, not proof of a fixed driver. Recheck settings after driver updates.";
@@ -819,6 +876,7 @@ public sealed class MainViewModel : Observable, IDisposable
             return;
 
         _history.Clear();
+        RefreshWorkaround();
         _tracker = new AnomalyTracker();
         _savedClosed = 0;
         _sessionBytes = 0;

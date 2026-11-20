@@ -148,6 +148,19 @@ public class WorkaroundTests
         Assert.Equal(0, platform.Mutations);
     }
 
+    [Fact]
+    public void Configured_state_is_read_from_registry_even_without_backup_or_service()
+    {
+        var platform = new FakePlatform { Setting = new(true, true, true, 1), ServiceExists = false };
+        var workaround = new NvtoppsWorkaround(platform);
+        Assert.True(workaround.Inspect().Configured);
+        platform.Setting = new(true, true, true, 0);
+        Assert.False(workaround.Inspect().Configured);
+        platform.Setting = new(true, true, false, 0);
+        Assert.Null(workaround.Inspect().Configured);
+        Assert.Equal(0, platform.Mutations);
+    }
+
     sealed class FakePlatform : INvtoppsPlatform
     {
         public bool ServiceExists { get; set; } = true;

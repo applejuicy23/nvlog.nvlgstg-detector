@@ -7,11 +7,11 @@ public partial class MainWindow : FluentWindow
 {
     readonly MainViewModel _viewModel;
 
-    public MainWindow(SingleInstance instance, string? historyPath = null)
+    public MainWindow(SingleInstance instance, string? historyPath = null, NvlogDetector.Core.INvtoppsPlatform? workaroundPlatform = null)
     {
         InitializeComponent();
         SystemThemeWatcher.Watch(this);
-        _viewModel = new MainViewModel(instance, historyPath);
+        _viewModel = new MainViewModel(instance, historyPath, workaroundPlatform);
         DataContext = _viewModel;
         Loaded += (_, _) => _viewModel.Start();
         Closing += (_, args) =>

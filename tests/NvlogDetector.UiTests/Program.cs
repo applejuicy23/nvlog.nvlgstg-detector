@@ -41,9 +41,10 @@ internal static class Program
             application.DispatcherUnhandledException -= (DispatcherUnhandledExceptionEventHandler)unhandled.CreateDelegate(typeof(DispatcherUnhandledExceptionEventHandler), application);
             Wpf.Ui.Appearance.ApplicationThemeManager.ApplySystemTheme();
             using var instance = new SingleInstance();
-            using (var view = new MainViewModel(instance, path))
+            using (var view = new MainViewModel(instance, path, new ReadOnlyWorkaroundPlatform(false)))
             {
                 Check(view.EpisodesView.Cast<EpisodeRow>().Count() == 6, "All colors initially visible");
+                Check(view.WorkaroundActivityText.Contains("OFF (registry)"), "Startup detects OFF registry state");
                 view.ShowYellow = false;
                 view.ShowRed = false;
                 Check(view.EpisodesView.Cast<EpisodeRow>().All(row => row.Severity == EpisodeSeverity.Activity), "Blue filter");
@@ -76,11 +77,28 @@ internal static class Program
                 Check(view.EpisodesView.Cast<EpisodeRow>().Select(row => row.Start).SequenceEqual(view.Episodes.Select(row => row.Start).OrderDescending()), "Newest-first order");
             }
 
+            using (var secondInstance = new SingleInstance())
+            using (var restarted = new MainViewModel(secondInstance, path, new ReadOnlyWorkaroundPlatform(true)))
+            {
+                Check(restarted.WorkaroundConfigured && restarted.WorkaroundActivityText.Contains("ON (registry)"), "Restart rereads actual registry state");
+                Check(restarted.WorkaroundHistory.Count == 2, "Changed state recorded after restart");
+                Check(restarted.WorkaroundHistory[0].Contains("actual change time and actor unknown"), "External change has no invented actor");
+            }
+            using (var thirdInstance = new SingleInstance())
+            using (var unchanged = new MainViewModel(thirdInstance, path, new ReadOnlyWorkaroundPlatform(true)))
+                Check(unchanged.WorkaroundHistory.Count == 2, "Unchanged startup preserves history without duplicates");
+            using (var fourthInstance = new SingleInstance())
+            using (var unknown = new MainViewModel(fourthInstance, path, new ReadOnlyWorkaroundPlatform(true, fail: true)))
+            {
+                Check(!unknown.WorkaroundConfigurationKnown && unknown.WorkaroundActivityText.Contains("UNKNOWN"), "Unreadable registry is UNKNOWN, not OFF");
+                Check(unknown.WorkaroundHistory.Count == 2, "Read failure preserves prior observations");
+            }
+
             if (args.Length == 1)
             {
                 // Render a detached visual using isolated test history. Never open or control a desktop window.
                 using var renderInstance = new SingleInstance();
-                var window = new MainWindow(renderInstance, path);
+                var window = new MainWindow(renderInstance, path, new ReadOnlyWorkaroundPlatform(true));
                 var root = (FrameworkElement)window.Content;
                 var view = window.DataContext;
                 window.Content = null;
@@ -105,6 +123,16 @@ internal static class Program
                 Check(grid.Columns[4].SortMemberPath == nameof(EpisodeRow.Bytes), "Volume column sorts numerically");
                 Check(window.FindName("ApplyWorkaroundButton") is Button, "Apply workaround button exists");
                 Check(window.FindName("RestoreWorkaroundButton") is Button, "Restore workaround button exists");
+                Check(window.FindName("WorkaroundActivityBanner") is Border banner && banner.ActualHeight > 50, "Workaround state strip has visible layout space");
+                var historyExpander = (Expander)window.FindName("WorkaroundHistoryExpander");
+                historyExpander.IsExpanded = true;
+                var expandFrame = new DispatcherFrame();
+                var expandTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                expandTimer.Tick += (_, _) => { expandTimer.Stop(); expandFrame.Continue = false; };
+                expandTimer.Start();
+                Dispatcher.PushFrame(expandFrame);
+                root.UpdateLayout();
+                Check(historyExpander.Content is ScrollViewer historyScroll && historyScroll.ActualHeight > 20, "Expanded workaround history has visible layout space");
                 var bitmap = new RenderTargetBitmap(1120, 1200, 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(root);
                 var encoder = new PngBitmapEncoder();
@@ -112,7 +140,7 @@ internal static class Program
                 using var output = File.Create(args[0]);
                 encoder.Save(output);
             }
-            Console.WriteLine("PASS: isolated registry backup/restore, color filters, sorting, table layout, and workaround buttons. NVIDIA settings/services were not changed.");
+            Console.WriteLine("PASS: isolated registry backup/restore, startup state and persistent history, color filters, sorting, table layout, and workaround controls. NVIDIA settings/services were not changed.");
             return 0;
         }
         catch (Exception error)
@@ -166,5 +194,18 @@ internal static class Program
             Check(platform.ReadBackup() == null, "Backup cleared");
         }
         finally { hive.DeleteSubKeyTree(root, throwOnMissingSubKey: false); }
+    }
+
+    sealed class ReadOnlyWorkaroundPlatform(bool configured, bool fail = false) : INvtoppsPlatform
+    {
+        public bool ServiceExists => true;
+        public bool ServiceRunning => true;
+        public NvtoppsSetting ReadSetting() => fail ? throw new UnauthorizedAccessException("Test read failure") : new(true, configured, true, configured ? 1 : 0);
+        public NvtoppsBackup? ReadBackup() => null;
+        public void SaveBackup(NvtoppsBackup backup) => throw new InvalidOperationException("Unexpected mutation");
+        public void ClearBackup() => throw new InvalidOperationException("Unexpected mutation");
+        public void DisablePlugin() => throw new InvalidOperationException("Unexpected mutation");
+        public void RestoreSetting(NvtoppsSetting original) => throw new InvalidOperationException("Unexpected mutation");
+        public void RestartService() => throw new InvalidOperationException("Unexpected mutation");
     }
 }
