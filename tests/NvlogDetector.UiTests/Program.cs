@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using System.Windows.Threading;
 using NvlogDetector;
 using NvlogDetector.Core;
@@ -94,8 +95,15 @@ internal static class Program
                 Check(unknown.WorkaroundHistory.Count == 2, "Read failure preserves prior observations");
             }
 
-            if (args.Length == 1)
+            // Layout and scrolling are checked in CI too; the PNG is optional.
             {
+                var renderHistory = HistoryStore.Load(path);
+                for (var count = 0; count < 40; count++)
+                    renderHistory.AddEpisode(new StoredEpisode { Start = now.AddHours(-2).AddMinutes(count),
+                        End = now.AddHours(-2).AddMinutes(count).AddSeconds(20), Bytes = 1048576,
+                        Seconds = 21, PeakBytesPerSecond = 524288,
+                        Severity = count % 3 == 0 ? EpisodeSeverity.Loop : count % 3 == 1 ? EpisodeSeverity.Spike : EpisodeSeverity.Activity });
+                renderHistory.Save();
                 // Render a detached visual using isolated test history. Never open or control a desktop window.
                 using var renderInstance = new SingleInstance();
                 var window = new MainWindow(renderInstance, path, new ReadOnlyWorkaroundPlatform(true));
@@ -117,13 +125,31 @@ internal static class Program
                 Dispatcher.PushFrame(frame);
                 root.UpdateLayout();
                 var grid = (DataGrid)window.FindName("ActivityGrid");
-                Check(grid.Items.Count == 6, "Rendered table has all rows");
-                Check(grid.ActualHeight >= 140, "Table has visible layout space");
+                Check(grid.Items.Count == 46, "Rendered table retains all rows");
+                Check(grid.ActualHeight >= 350, "Table has a taller viewport");
+                var tableScroll = Descendants<ScrollViewer>(grid).First();
+                Check(tableScroll.ScrollableHeight > 0, "Table has its own scrollable overflow");
+                tableScroll.RaiseEvent(new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, -120)
+                    { RoutedEvent = Mouse.MouseWheelEvent });
+                root.UpdateLayout();
+                Check(tableScroll.VerticalOffset > 0, "Mouse wheel scrolls table rows");
+                tableScroll.ScrollToBottom();
+                root.UpdateLayout();
+                var last = grid.Items[grid.Items.Count - 1];
+                Check(grid.ItemContainerGenerator.ContainerFromItem(last) is DataGridRow lastRow &&
+                    lastRow.TranslatePoint(new Point(0, 0), grid).Y < grid.ActualHeight,
+                    "Last event can be reached inside the table");
+                tableScroll.ScrollToTop();
+                root.UpdateLayout();
                 Check(grid.Columns[0].SortMemberPath == nameof(EpisodeRow.SeverityRank), "Level column sorts by rank");
                 Check(grid.Columns[4].SortMemberPath == nameof(EpisodeRow.Bytes), "Volume column sorts numerically");
                 Check(window.FindName("ApplyWorkaroundButton") is Button, "Apply workaround button exists");
                 Check(window.FindName("RestoreWorkaroundButton") is Button, "Restore workaround button exists");
                 Check(window.FindName("WorkaroundActivityBanner") is Border banner && banner.ActualHeight > 50, "Workaround state strip has visible layout space");
+                var workaroundBanner = (Border)window.FindName("WorkaroundActivityBanner");
+                var applyButton = (Button)window.FindName("ApplyWorkaroundButton");
+                Check(workaroundBanner.TranslatePoint(new Point(0, 0), root).Y > applyButton.TranslatePoint(new Point(0, 0), root).Y + applyButton.ActualHeight,
+                    "Workaround status is below its controls");
                 var historyExpander = (Expander)window.FindName("WorkaroundHistoryExpander");
                 historyExpander.IsExpanded = true;
                 var expandFrame = new DispatcherFrame();
@@ -133,14 +159,20 @@ internal static class Program
                 Dispatcher.PushFrame(expandFrame);
                 root.UpdateLayout();
                 Check(historyExpander.Content is ScrollViewer historyScroll && historyScroll.ActualHeight > 20, "Expanded workaround history has visible layout space");
-                var bitmap = new RenderTargetBitmap(1120, 1200, 96, 96, PixelFormats.Pbgra32);
-                bitmap.Render(root);
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                using var output = File.Create(args[0]);
-                encoder.Save(output);
+                if (args.Length == 1)
+                {
+                    var pageScroll = Descendants<ScrollViewer>(root).First();
+                    pageScroll.ScrollToBottom();
+                    root.UpdateLayout();
+                    var bitmap = new RenderTargetBitmap(1120, 1200, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(root);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    using var output = File.Create(args[0]);
+                    encoder.Save(output);
+                }
             }
-            Console.WriteLine("PASS: isolated registry backup/restore, startup state and persistent history, color filters, sorting, table layout, and workaround controls. NVIDIA settings/services were not changed.");
+            Console.WriteLine("PASS: isolated registry backup/restore, startup state and history, filters, sorting, table mouse-wheel scrolling and last-row access, and workaround placement. NVIDIA settings/services were not changed.");
             return 0;
         }
         catch (Exception error)
@@ -154,6 +186,16 @@ internal static class Program
     static void Check(bool condition, string name)
     {
         if (!condition) throw new InvalidOperationException(name);
+    }
+
+    static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) yield return match;
+            foreach (var descendant in Descendants<T>(child)) yield return descendant;
+        }
     }
 
     static void CheckRegistryWorkaround()

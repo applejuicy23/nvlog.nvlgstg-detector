@@ -49,7 +49,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" MinHeight="280" MaxHeight="380" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -202,37 +202,7 @@
                             Text="{Binding TodayText}" />
                     </StackPanel>
                 </DockPanel>
-                <Border x:Name="WorkaroundActivityBanner" DockPanel.Dock="Top" Margin="0,0,0,10" Padding="10,8" CornerRadius="4" BorderThickness="3,0,0,0">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="#10808080" />
-                            <Setter Property="BorderBrush" Value="#808080" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding WorkaroundConfigured}" Value="True">
-                                    <Setter Property="Background" Value="#184CC98A" />
-                                    <Setter Property="BorderBrush" Value="#4CC98A" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding WorkaroundConfigurationKnown}" Value="False">
-                                    <Setter Property="Background" Value="#18FCE100" />
-                                    <Setter Property="BorderBrush" Value="#FCE100" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel>
-                        <TextBlock FontWeight="SemiBold" Text="{Binding WorkaroundActivityText}" TextWrapping="Wrap" />
-                        <TextBlock FontSize="12" Margin="0,3,0,0" Text="{Binding WorkaroundActivityHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                        <Expander x:Name="WorkaroundHistoryExpander" Margin="0,5,0,0" Header="{Binding WorkaroundHistoryHeader}">
-                            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                <ItemsControl ItemsSource="{Binding WorkaroundHistory}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate><TextBlock Margin="0,4" FontSize="12" Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </Expander>
-                    </StackPanel>
-                </Border>
+
                 <DockPanel Margin="0,0,0,8" DockPanel.Dock="Top" LastChildFill="False">
                     <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" Text="Show:" />
                     <CheckBox VerticalAlignment="Center" Margin="0,0,16,0" Foreground="#2F9DDF" Content="Blue · activity" IsChecked="{Binding ShowBlue}" />
@@ -246,7 +216,7 @@
                     </ComboBox>
                 </DockPanel>
                 <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ActivityFilterSummary}" />
-                <Grid MinHeight="140">
+                <Grid Height="360">
                     <DataGrid
                         x:Name="ActivityGrid"
                         AutoGenerateColumns="False"
@@ -256,7 +226,11 @@
                         HeadersVisibility="Column"
                         IsReadOnly="True"
                         ItemsSource="{Binding EpisodesView}"
-                        RowHeight="36">
+                        RowHeight="36"
+                        ScrollViewer.VerticalScrollBarVisibility="Visible"
+                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                        ScrollViewer.CanContentScroll="True"
+                        EnableRowVirtualization="True">
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
                                 <Setter Property="Foreground" Value="#2F9DDF" />
@@ -314,6 +288,37 @@
                         <TextBlock Text="{Binding WorkaroundStatusText}" TextWrapping="Wrap" FontSize="12" />
                         <TextBlock Margin="0,4,0,0" Text="{Binding WorkaroundResultText}" TextWrapping="Wrap" FontSize="12"
                             Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Border x:Name="WorkaroundActivityBanner" Margin="0,10,0,0" Padding="10,8" CornerRadius="4" BorderThickness="3,0,0,0">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#10808080" />
+                                    <Setter Property="BorderBrush" Value="#808080" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding WorkaroundConfigured}" Value="True">
+                                            <Setter Property="Background" Value="#184CC98A" />
+                                            <Setter Property="BorderBrush" Value="#4CC98A" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding WorkaroundConfigurationKnown}" Value="False">
+                                            <Setter Property="Background" Value="#18FCE100" />
+                                            <Setter Property="BorderBrush" Value="#FCE100" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="{Binding WorkaroundActivityText}" TextWrapping="Wrap" />
+                                <TextBlock FontSize="12" Margin="0,3,0,0" Text="{Binding WorkaroundActivityHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Expander x:Name="WorkaroundHistoryExpander" Margin="0,5,0,0" Header="{Binding WorkaroundHistoryHeader}">
+                                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl ItemsSource="{Binding WorkaroundHistory}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate><TextBlock Margin="0,4" FontSize="12" Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ui:Card>
                 <Expander Margin="0,8,0,0" Header="Details and diagnostics">

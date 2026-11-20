@@ -9,7 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>NvlogDetector</RootNamespace>
     <AssemblyName>NvlogDetector</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <Product>nvlog.nvlgstg detector</Product>
     <Description>Monitor for excessive writes to NVIDIA nvlog.nvlgstg with an optional reversible community workaround.</Description>
   </PropertyGroup>
