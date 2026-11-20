@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a problem with the detector or its measurements.
+body:
+  - type: markdown
+    attributes:
+      value: "Describe observed behavior. Remove personal paths and other private information before posting screenshots or diagnostics."
+  - type: input
+    id: version
+    attributes:
+      label: Detector version
+      placeholder: '1.0.2'
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows version, GPU, NVIDIA driver version
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics and reproduction steps
+      description: Include whether the program ran as administrator and whether Resource Monitor showed writes to this exact file.

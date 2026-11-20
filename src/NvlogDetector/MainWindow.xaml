@@ -1,0 +1,300 @@
+<ui:FluentWindow
+    x:Class="NvlogDetector.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:NvlogDetector"
+    Title="nvlog.nvlgstg"
+    Width="1120"
+    Height="900"
+    MinWidth="960"
+    MinHeight="760"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen"
+    FontSize="14"
+    Language="en-US"
+    UseLayoutRounding="True">
+    <ui:FluentWindow.Resources>
+        <local:BoolToVisibilityConverter x:Key="ShowIfTrue" />
+        <local:BoolToVisibilityConverter x:Key="ShowIfFalse" Invert="True" />
+        <Style x:Key="CardLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="CardValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style x:Key="CardHint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        </Style>
+    </ui:FluentWindow.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <ui:TitleBar Title="nvlog.nvlgstg" Grid.Row="0" />
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="24,2,24,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="280" MaxHeight="380" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,6,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding State}" Value="Loop">
+                                            <Setter Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Spike">
+                                            <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Activity">
+                                            <Setter Property="Fill" Value="#2F9DDF" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Warning">
+                                            <Setter Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Idle">
+                                            <Setter Property="Fill" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding StatusText}" />
+                    </StackPanel>
+                    <TextBlock
+                        Margin="16,4,0,0"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="Writes to nvlog.nvlgstg only" />
+                </StackPanel>
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    Text="Red: repeated elevated writes over 2 minutes" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,0,0,12" Visibility="{Binding BannerOpen, Converter={StaticResource ShowIfTrue}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ui:InfoBar
+                    IsClosable="False"
+                    IsOpen="True"
+                    Message="{Binding BannerMessage}"
+                    Severity="{Binding BannerSeverity}"
+                    Title="{Binding BannerTitle}" />
+                <ui:Button
+                    Grid.Column="1"
+                    Margin="12,0,0,0"
+                    VerticalAlignment="Center"
+                    Appearance="Primary"
+                    Command="{Binding ElevateCommand}"
+                    Content="Restart as administrator"
+                    Visibility="{Binding ShowElevate, Converter={StaticResource ShowIfTrue}}" />
+            </Grid>
+
+            <UniformGrid Grid.Row="2" Columns="4" Margin="0,0,0,12">
+                <ui:Card Margin="0,0,8,0" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardLabel}" Text="Now" />
+                        <TextBlock Text="{Binding RateText}">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource CardValue}" TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLoop}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsSpike}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CardHint}" Text="{Binding RateHint}" />
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Margin="4,0" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardLabel}" Text="Session" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding SessionText}" />
+                        <TextBlock Style="{StaticResource CardHint}" Text="{Binding SessionHint}" />
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Margin="4,0" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardLabel}" Text="All time" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding LifetimeText}" />
+                        <TextBlock Style="{StaticResource CardHint}" Text="{Binding LifetimeHint}" />
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Margin="8,0,0,0" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardLabel}" Text="On disk" />
+                        <TextBlock Style="{StaticResource CardValue}" Text="{Binding FileSizeText}" />
+                        <TextBlock Style="{StaticResource CardHint}" Text="{Binding FileHint}" />
+                    </StackPanel>
+                </ui:Card>
+            </UniformGrid>
+
+            <ui:Card Grid.Row="3" Margin="0,0,0,12" Padding="16,14">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontWeight="SemiBold"
+                            Text="Writes per minute" />
+                        <TextBlock
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{Binding ChartCaption}" />
+                    </DockPanel>
+                    <local:RateChart Height="100" Bars="{Binding ChartBars}" />
+                    <DockPanel Margin="0,6,0,0">
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text="1 hour ago" />
+                        <TextBlock
+                            HorizontalAlignment="Right"
+                            FontSize="12"
+                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                            Text="now" />
+                    </DockPanel>
+                </StackPanel>
+            </ui:Card>
+
+            <DockPanel Grid.Row="4">
+                <DockPanel Margin="0,0,0,8" DockPanel.Dock="Top">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <ui:Button Margin="0,0,8,0" Command="{Binding ExportCommand}" Content="Save visible CSV" />
+                        <ui:Button Appearance="Secondary" Command="{Binding ClearCommand}" Content="Clear log" />
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock FontWeight="SemiBold" Text="All log activity" />
+                        <TextBlock
+                            Margin="0,2,0,0"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{Binding TodayText}" />
+                    </StackPanel>
+                </DockPanel>
+                <DockPanel Margin="0,0,0,8" DockPanel.Dock="Top" LastChildFill="False">
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" Text="Show:" />
+                    <CheckBox VerticalAlignment="Center" Margin="0,0,16,0" Foreground="#2F9DDF" Content="Blue · activity" IsChecked="{Binding ShowBlue}" />
+                    <CheckBox VerticalAlignment="Center" Margin="0,0,16,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" Content="Yellow · elevated" IsChecked="{Binding ShowYellow}" />
+                    <CheckBox VerticalAlignment="Center" Margin="0,0,20,0" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Content="Red · sustained" IsChecked="{Binding ShowRed}" />
+                    <ComboBox Width="190" SelectedIndex="{Binding SelectedOrder}" ToolTip="Sort activities">
+                        <ComboBoxItem Content="Newest first" />
+                        <ComboBoxItem Content="Blue → yellow → red" />
+                        <ComboBoxItem Content="Red → yellow → blue" />
+                        <ComboBoxItem Content="Most written first" />
+                    </ComboBox>
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ActivityFilterSummary}" />
+                <Grid MinHeight="140">
+                    <DataGrid
+                        x:Name="ActivityGrid"
+                        AutoGenerateColumns="False"
+                        BorderThickness="0"
+                        CanUserAddRows="False"
+                        GridLinesVisibility="Horizontal"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        ItemsSource="{Binding EpisodesView}"
+                        RowHeight="36">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Foreground" Value="#2F9DDF" />
+                                <Setter Property="Background" Value="#102F9DDF" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SeverityRank}" Value="1">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                        <Setter Property="Background" Value="#10FCE100" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SeverityRank}" Value="2">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        <Setter Property="Background" Value="#10FF6B6B" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="90" Binding="{Binding KindText}" Header="Kind" SortMemberPath="SeverityRank" />
+                            <DataGridTextColumn Width="180" Binding="{Binding StartText}" Header="Start" SortMemberPath="Start" />
+                            <DataGridTextColumn Width="180" Binding="{Binding EndText}" Header="End" SortMemberPath="End" />
+                            <DataGridTextColumn Width="100" Binding="{Binding DurationText}" Header="Duration" SortMemberPath="Seconds" />
+                            <DataGridTextColumn Width="110" Binding="{Binding VolumeText}" Header="Written" SortMemberPath="Bytes" />
+                            <DataGridTextColumn Width="110" Binding="{Binding PeakText}" Header="Peak" SortMemberPath="PeakBytesPerSecond" />
+                            <DataGridTextColumn Width="*" Binding="{Binding AverageText}" Header="Average" SortMemberPath="AverageBytesPerSecond" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        IsHitTestVisible="False"
+                        Text="{Binding EmptyLogText}"
+                        Visibility="{Binding HasEpisodes, Converter={StaticResource ShowIfFalse}}" />
+                </Grid>
+            </DockPanel>
+
+            <StackPanel Grid.Row="5" Margin="0,12,0,0">
+                <TextBlock FontWeight="SemiBold" Text="{Binding FilePathText}" TextWrapping="Wrap" />
+                <TextBlock
+                    Margin="0,4,0,0"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    Text="{Binding ProcessText}"
+                    TextWrapping="Wrap" />
+                <Expander Margin="0,8,0,0" Header="Details and diagnostics">
+                <StackPanel>
+                <TextBlock
+                    Margin="0,6,0,0"
+                    Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                    Text="{Binding VersionNote}"
+                    TextWrapping="Wrap"
+                    Visibility="{Binding HasVersionNote, Converter={StaticResource ShowIfTrue}}" />
+                <TextBlock
+                    Margin="0,8,0,0"
+                    FontSize="12"
+                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                    Text="{Binding Footnote}"
+                    TextWrapping="Wrap" />
+                    <TextBlock Margin="0,10,0,0" FontWeight="SemiBold" Text="Diagnostics" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        FontFamily="Cascadia Mono, Consolas"
+                        FontSize="12"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="{Binding DiagnosticsText}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                </Expander>
+            </StackPanel>
+        </Grid>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>

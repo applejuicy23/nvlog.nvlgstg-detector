@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NvlogDetector.Core/NvlogDetector.Core.csproj" />
+    <Project Path="src/NvlogDetector/NvlogDetector.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NvlogDetector.EtwTests/NvlogDetector.EtwTests.csproj" />
+    <Project Path="tests/NvlogDetector.Tests/NvlogDetector.Tests.csproj" />
+    <Project Path="tests/NvlogDetector.UiTests/NvlogDetector.UiTests.csproj" />
+  </Folder>
+</Solution>
